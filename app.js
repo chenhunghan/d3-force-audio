@@ -21,11 +21,11 @@ function start() {
             return "node"
         }
     ).attr("fill-opacity", function(d) {
-            return (1 - (d.volume * 15))
+            return (1 - (d.volume * 18))
         }
     ).attr("r", function(d) {
             console.log(d.volume)
-            return d.volume * 800
+            return d.volume * 1200
         }
     ).on("mouseover", function(){
             d3.select(this).style("fill", "red");}
@@ -43,8 +43,9 @@ function makeid()
 {
     var text = "";
     var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    for( var i=0; i < 8; i++ )
+    for( var i=0; i < 8; i++ ) {
         text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
     return text;
 }
 
@@ -58,25 +59,25 @@ function draw (sound) {
 setInterval(function(){
     if (nodes.length > 60) {
         nodes.splice(0, 15);
-        force.charge(-40)
+        force.charge(-100)
     } else if (nodes.length > 50) {
         nodes.splice(0, 10);
-        force.charge(-50)
+        force.charge(-140)
     } else if (nodes.length > 40) {
         nodes.splice(0, 8);
-        force.charge(-70)
+        force.charge(-160)
     } else if (nodes.length > 30) {
         nodes.splice(0, 6);
-        force.charge(-80)
+        force.charge(-200)
     } else if (nodes.length > 20) {
         nodes.splice(0, 4);
-        force.charge(-100)
+        force.charge(-250)
     } else if (nodes.length > 10) {
         nodes.splice(0, 2);
         force.charge(-300)
     } else if (nodes.length > 1) {
         nodes.splice(0, 1);
-        force.charge(-500)
+        force.charge(-600)
     }
 }, 2000);
 
