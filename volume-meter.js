@@ -1,96 +1,147 @@
-/*
-The MIT License (MIT)
+var preClip = null
+var preV = 0
+function startListen (callback) {
+	function createAudioMeter(audioContext,clipLevel,averaging,clipLag) {
+		var processor = audioContext.createScriptProcessor(512);
+		processor.onaudioprocess = volumeAudioProcess;
+		processor.clipping = false;
+		processor.lastClip = 0;
+		processor.volume = 0;
+		processor.clipLevel = clipLevel || 0.07;
+		processor.averaging = averaging || 0.001;
+		processor.clipLag = clipLag || 250;
 
-Copyright (c) 2014 Chris Wilson
+		// this will have no effect, since we don't copy the input to the output,
+		// but works around a current Chrome bug.
+		processor.connect(audioContext.destination);
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+		processor.checkClipping =
+			function(){
+				if (!this.clipping)
+					return false;
+				if ((this.lastClip + this.clipLag) < window.performance.now())
+					this.clipping = false;
+				return this.clipping;
+			};
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+		processor.shutdown =
+			function(){
+				this.disconnect();
+				this.onaudioprocess = null;
+			};
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-*/
+		return processor;
+	}
 
-/*
+	function volumeAudioProcess( event) {
+		var buf = event.inputBuffer.getChannelData(0);
+		var bufLength = buf.length;
+		var sum = 0;
+		var x;
 
-Usage:
-audioNode = createAudioMeter(audioContext,clipLevel,averaging,clipLag);
+		// Do a root-mean-square on the samples: sum up the squares...
+		for (var i=0; i<bufLength; i++) {
+			x = buf[i];
+			if (Math.abs(x)>=this.clipLevel) {
+				this.clipping = true;
+				this.lastClip = window.performance.now();
+			}
+			sum += x * x;
+		}
 
-audioContext: the AudioContext you're using.
-clipLevel: the level (0 to 1) that you would consider "clipping".
-   Defaults to 0.98.
-averaging: how "smoothed" you would like the meter to be over time.
-   Should be between 0 and less than 1.  Defaults to 0.95.
-clipLag: how long you would like the "clipping" indicator to show
-   after clipping has occured, in milliseconds.  Defaults to 750ms.
+		// ... then take the square root of the sum.
+		var rms =  Math.sqrt(sum / bufLength);
 
-Access the clipping through node.checkClipping(); use node.shutdown to get rid of it.
-*/
+		// Now smooth this out with the averaging factor applied
+		// to the previous sample - take the max here because we
+		// want "fast attack, slow release."
+		this.volume = Math.max(rms, this.volume*this.averaging);
+	}
 
-function createAudioMeter(audioContext,clipLevel,averaging,clipLag) {
-	var processor = audioContext.createScriptProcessor(512);
-	processor.onaudioprocess = volumeAudioProcess;
-	processor.clipping = false;
-	processor.lastClip = 0;
-	processor.volume = 0;
-	processor.clipLevel = clipLevel || 0.98;
-	processor.averaging = averaging || 0.95;
-	processor.clipLag = clipLag || 750;
+	var audioContext = null;
+	var meter = null;
+	var canvasContext = null;
+	var WIDTH=1500;
+	var HEIGHT=50;
+	var rafID = null;
 
-	// this will have no effect, since we don't copy the input to the output,
-	// but works around a current Chrome bug.
-	processor.connect(audioContext.destination);
+	window.onload = function() {
 
-	processor.checkClipping =
-		function(){
-			if (!this.clipping)
-				return false;
-			if ((this.lastClip + this.clipLag) < window.performance.now())
-				this.clipping = false;
-			return this.clipping;
-		};
+		// grab our canvas
+		canvasContext = document.getElementById( "meter" ).getContext("2d");
 
-	processor.shutdown =
-		function(){
-			this.disconnect();
-			this.onaudioprocess = null;
-		};
+		// monkeypatch Web Audio
+		window.AudioContext = window.AudioContext || window.webkitAudioContext;
 
-	return processor;
+		// grab an audio context
+		audioContext = new AudioContext();
+
+		// Attempt to get audio input
+		try {
+			// monkeypatch getUserMedia
+			navigator.getUserMedia =
+				navigator.getUserMedia ||
+				navigator.webkitGetUserMedia ||
+				navigator.mozGetUserMedia;
+
+			// ask for an audio input
+			navigator.getUserMedia(
+				{
+					"audio": {
+						"mandatory": {
+							"googEchoCancellation": "false",
+							"googAutoGainControl": "false",
+							"googNoiseSuppression": "false",
+							"googHighpassFilter": "false"
+						},
+						"optional": []
+					},
+				}, gotStream, didntGetStream);
+		} catch (e) {
+			alert('getUserMedia threw exception :' + e);
+		}
+
+	}
+
+	function didntGetStream() {
+		alert('Stream generation failed.');
+	}
+
+	var mediaStreamSource = null;
+
+	function gotStream(stream) {
+		// Create an AudioNode from the stream.
+		mediaStreamSource = audioContext.createMediaStreamSource(stream);
+
+		// Create a new volume meter and connect it.
+		meter = createAudioMeter(audioContext);
+		mediaStreamSource.connect(meter);
+
+		// kick off the visual updating
+		drawLoop();
+	}
+
+
+	function drawLoop() {
+		// clear the background
+		canvasContext.clearRect(0,0,WIDTH,HEIGHT);
+
+		// check if we're currently clipping
+		if (meter.checkClipping() && preClip != meter.lastClip && (preV-meter.volume) > 0.01) {
+			callback(meter)
+			canvasContext.fillStyle = "red";
+		}
+		else {
+			canvasContext.fillStyle = "black";
+		}
+		// draw a bar based on the current volume
+		canvasContext.fillRect(0, 0, meter.volume*WIDTH*2.8, HEIGHT);
+
+		preClip = meter.lastClip
+		preV = meter.volume
+		// set up the next visual callback
+		rafID = window.requestAnimationFrame( drawLoop );
+	}
+
 }
 
-function volumeAudioProcess( event ) {
-	var buf = event.inputBuffer.getChannelData(0);
-    var bufLength = buf.length;
-	var sum = 0;
-    var x;
-
-	// Do a root-mean-square on the samples: sum up the squares...
-    for (var i=0; i<bufLength; i++) {
-    	x = buf[i];
-    	if (Math.abs(x)>=this.clipLevel) {
-    		this.clipping = true;
-    		this.lastClip = window.performance.now();
-    	}
-    	sum += x * x;
-    }
-
-    // ... then take the square root of the sum.
-    var rms =  Math.sqrt(sum / bufLength);
-
-    // Now smooth this out with the averaging factor applied
-    // to the previous sample - take the max here because we
-    // want "fast attack, slow release."
-    this.volume = Math.max(rms, this.volume*this.averaging);
-}

@@ -1,0 +1,8 @@
+#svgwraper {
+    position: absolute;
+    top: -300px;
+    left: 450px;
+}
+.node {
+    /*fill: rgba(0,0,0,0.01);*/
+}
