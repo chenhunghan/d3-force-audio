@@ -13,34 +13,7 @@ var svg = d3.select("#svgwraper").append("svg")
     .attr("width", width)
     .attr("height", height);
 
-console.log(svg)
-
 var node = svg.selectAll(".node")
-
-setInterval(function(){
-    if (nodes.length > 60) {
-        nodes.splice(0, 15);
-        force.charge(-40)
-    } else if (nodes.length > 50) {
-        nodes.splice(0, 10);
-        force.charge(-50)
-    } else if (nodes.length > 40) {
-        nodes.splice(0, 8);
-        force.charge(-70)
-    } else if (nodes.length > 30) {
-        nodes.splice(0, 6);
-        force.charge(-80)
-    } else if (nodes.length > 20) {
-        nodes.splice(0, 4);
-        force.charge(-100)
-    } else if (nodes.length > 10) {
-        nodes.splice(0, 2);
-        force.charge(-300)
-    } else if (nodes.length > 1) {
-        nodes.splice(0, 1);
-        force.charge(-500)
-    }
-}, 2000);
 
 function start() {
     node = node.data(force.nodes(), function(d) { return d.id;});
@@ -53,7 +26,10 @@ function start() {
     ).attr("r", function(d) {
             console.log(d.volume)
             return d.volume * 800
-        });
+        }
+    ).on("mouseover", function(){
+            d3.select(this).style("fill", "red");}
+    );
     node.exit().remove();
     force.start();
 }
@@ -79,5 +55,29 @@ function draw (sound) {
     start();
 }
 
+setInterval(function(){
+    if (nodes.length > 60) {
+        nodes.splice(0, 15);
+        force.charge(-40)
+    } else if (nodes.length > 50) {
+        nodes.splice(0, 10);
+        force.charge(-50)
+    } else if (nodes.length > 40) {
+        nodes.splice(0, 8);
+        force.charge(-70)
+    } else if (nodes.length > 30) {
+        nodes.splice(0, 6);
+        force.charge(-80)
+    } else if (nodes.length > 20) {
+        nodes.splice(0, 4);
+        force.charge(-100)
+    } else if (nodes.length > 10) {
+        nodes.splice(0, 2);
+        force.charge(-300)
+    } else if (nodes.length > 1) {
+        nodes.splice(0, 1);
+        force.charge(-500)
+    }
+}, 2000);
 
 startListen(draw)
